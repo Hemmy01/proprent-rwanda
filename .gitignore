@@ -1,0 +1,59 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+!**/[Pp]ackages/build/
+
+# ASP.NET
+App_Data/
+PublishProfiles/
+*.pubxml
+*.pubxml.user
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node / Frontend build output
+node_modules/
+npm-debug.log*
+frontend/dist/
+frontend/build/
+
+# Environment / secrets
+*.env
+*.env.local
+appsettings.Development.json
+appsettings.*.local.json
+
+# Runtime logs
+*.log
+
+# User-uploaded content (not part of source)
+wwwroot/uploads/*
+!wwwroot/uploads/.gitkeep
