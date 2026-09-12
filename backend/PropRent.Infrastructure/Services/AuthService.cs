@@ -1,13 +1,13 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using MailKit.Net.Smtp;
-using MailKit.Security;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
-using MimeKit;
 using PropRent.Core.DTOs;
 using PropRent.Core.Interfaces;
 using PropRent.Core.Models;
@@ -19,6 +19,9 @@ public class AuthService : IAuthService
 {
     private readonly AppDbContext _db;
     private readonly IConfiguration _config;
+
+    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
+    private const string BrevoEndpoint = "https://api.brevo.com/v3/smtp/email";
 
     public AuthService(AppDbContext db, IConfiguration config)
     {
@@ -207,49 +210,52 @@ public class AuthService : IAuthService
 
     private async Task SendEmailAsync(string toEmail, string subject, string htmlBody)
     {
-        var cfg = _config.GetSection("Email");
-        var from = cfg["From"] ?? throw new InvalidOperationException("Email:From not configured.");
-        var host = cfg["Host"] ?? throw new InvalidOperationException("Email:Host not configured.");
-        var port = int.Parse(cfg["Port"] ?? "587");
-        var username = cfg["Username"] ?? throw new InvalidOperationException("Email:Username not configured.");
-        var password = cfg["Password"] ?? throw new InvalidOperationException("Email:Password not configured.");
+        var apiKey = _config["Brevo:ApiKey"] ?? throw new InvalidOperationException("Brevo:ApiKey not configured.");
+        var from = _config["Email:From"] ?? throw new InvalidOperationException("Email:From not configured.");
 
-        var message = new MimeMessage();
-        message.From.Add(new MailboxAddress("PropRent Rwanda", from));
-        message.To.Add(MailboxAddress.Parse(toEmail));
-        message.Subject = subject;
-        message.Body = new TextPart("html") { Text = htmlBody };
-
-        using var client = new SmtpClient();
-        await client.ConnectAsync(host, port, SecureSocketOptions.StartTls);
-        await client.AuthenticateAsync(username, password);
-        await client.SendAsync(message);
-        await client.DisconnectAsync(true);
+        await SendViaBrevoAsync(apiKey, from, toEmail, subject, htmlBody);
     }
 
     public static async Task SendNotificationEmailWrapper(IConfiguration config, string toEmail, string subject, string htmlBody)
     {
         try
         {
-            var cfg = config.GetSection("Email");
-            var from = cfg["From"] ?? "noreply@proprent.rw";
-            var host = cfg["Host"] ?? "smtp.gmail.com";
-            var port = int.Parse(cfg["Port"] ?? "587");
-            var username = cfg["Username"] ?? string.Empty;
-            var password = cfg["Password"] ?? string.Empty;
+            var apiKey = config["Brevo:ApiKey"];
+            var from = config["Email:From"] ?? "noreply@proprent.rw";
+            if (string.IsNullOrEmpty(apiKey)) return;
 
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("PropRent Rwanda", from));
-            message.To.Add(MailboxAddress.Parse(toEmail));
-            message.Subject = subject;
-            message.Body = new TextPart("html") { Text = AuthService.BuildNotificationEmail(subject, htmlBody) };
-            using var client = new SmtpClient();
-            await client.ConnectAsync(host, port, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(username, password);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+            await SendViaBrevoAsync(apiKey, from, toEmail, subject, BuildNotificationEmail(subject, htmlBody));
         }
-        catch { /* fire-and-forget: don't fail the request if email fails */ }
+        catch (Exception ex)
+        {
+            // fire-and-forget: don't fail the request if a notification email fails, but log it
+            Console.Error.WriteLine($"[Email] Failed to send notification to {toEmail}: {ex.Message}");
+        }
+    }
+
+    private static async Task SendViaBrevoAsync(string apiKey, string fromEmail, string toEmail, string subject, string htmlBody)
+    {
+        var payload = new
+        {
+            sender = new { name = "PropRent Rwanda", email = fromEmail },
+            to = new[] { new { email = toEmail } },
+            subject,
+            htmlContent = htmlBody
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, BrevoEndpoint)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("api-key", apiKey);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var response = await HttpClient.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException($"Brevo email send failed ({(int)response.StatusCode}): {body}");
+        }
     }
 
     private static string BuildOtpEmail(string code, string purpose) => $@"

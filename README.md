@@ -55,7 +55,7 @@ The system supports three distinct user roles, each with a dedicated dashboard a
 | PostgreSQL | Relational database |
 | JWT Bearer Tokens | Authentication and authorization |
 | BCrypt.Net | Password hashing |
-| MailKit / MimeKit | Email delivery (OTP, notifications) |
+| Brevo Transactional Email API | Email delivery (OTP, notifications) over HTTPS |
 | Swashbuckle (Swagger) | API documentation |
 
 ### Frontend
@@ -457,13 +457,13 @@ sequenceDiagram
 | 1 | Tenant/Agent | Enters email and password on the login page |
 | 2 | System | Validates credentials against the database using BCrypt |
 | 3 | System | Checks `User.IsActive` — inactive accounts (pending agents) are blocked |
-| 4 | System | Generates a cryptographically random 6-digit OTP, saves it to `OtpCodes` with a 10-minute expiry, and sends it via SMTP email |
+| 4 | System | Generates a cryptographically random 6-digit OTP, saves it to `OtpCodes` with a 60-second expiry, and emails it via the Brevo API |
 | 5 | Tenant/Agent | Enters the received OTP code |
 | 6 | System | Validates the OTP — checks code match, expiry, and `IsUsed` flag |
 | 7 | System | Marks OTP as used, generates JWT access token and refresh token, saves refresh token to database |
 | 8 | Tenant/Agent | Receives tokens, stores them in `localStorage`, and is redirected to the Dashboard |
 
-**Security notes:** OTP codes expire after 10 minutes. A rate limit prevents requesting a new code within 60 seconds of the previous one. All existing unused codes for an email are invalidated when a new one is requested.
+**Security notes:** OTP codes expire after 60 seconds. A rate limit prevents requesting a new code within 60 seconds of the previous one. All existing unused codes for an email are invalidated when a new one is requested.
 
 ---
 
@@ -709,15 +709,16 @@ The backend reads configuration from `appsettings.json`, which ships with placeh
     "Audience": "PropRentClient",
     "ExpiryMinutes": "60"
   },
+  "Brevo": {
+    "ApiKey": "<your-brevo-api-key>"
+  },
   "Email": {
-    "Host": "smtp.gmail.com",
-    "Port": "587",
-    "From": "<sender-email>",
-    "Username": "<smtp-username>",
-    "Password": "<smtp-app-password>"
+    "From": "<a-verified-brevo-sender-email>"
   }
 }
 ```
+
+> **Why Brevo instead of SMTP:** most PaaS free tiers (Render included) block outbound SMTP ports (25/465/587) to prevent spam abuse. Email is sent via Brevo's transactional HTTP API instead, which works over standard HTTPS.
 
 For local development, override these with one of:
 - A git-ignored `appsettings.Development.json` in `backend/PropRent.API/` (already excluded via `.gitignore`)
