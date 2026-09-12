@@ -150,9 +150,116 @@ The system supports three distinct user roles, each with a dedicated dashboard a
 
 ## 5. Entity Relationship Diagram
 
-The ERD below illustrates all database tables, their attributes, primary keys (●), foreign keys (◆), and the relationships between them.
+The ERD below illustrates all database tables, their attributes, primary keys (PK), foreign keys (FK), and the relationships between them.
 
-![ERD Diagram](./diagrams/erd.png)
+```mermaid
+erDiagram
+    USERS ||--o| USER_PREFERENCES : has
+    USERS ||--o| AGENTS : "linked to"
+    AGENTS ||--o{ PROPERTIES : lists
+    PROPERTIES ||--|{ PROPERTY_IMAGES : has
+    PROPERTIES ||--o{ PROPERTY_AMENITIES : has
+    PROPERTIES ||--o{ APPLICATIONS : receives
+    USERS ||--o{ APPLICATIONS : submits
+    USERS ||--o{ WISHLIST : saves
+    PROPERTIES ||--o{ WISHLIST : "saved in"
+    USERS ||--o{ REFRESH_TOKENS : owns
+
+    USERS {
+        int Id PK
+        string FullName
+        string Email UK
+        string Phone
+        string PasswordHash
+        string Role
+        bool IsActive
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+    USER_PREFERENCES {
+        int Id PK
+        int UserId FK
+        string ListingType
+        string PropertyType
+        decimal MaxPrice
+        int MinBedrooms
+        string PreferredLocation
+        datetime UpdatedAt
+    }
+    AGENTS {
+        int Id PK
+        int UserId FK
+        string FullName
+        string Role
+        string AvatarUrl
+        string Phone
+        string Email
+        bool IsActive
+        datetime CreatedAt
+    }
+    PROPERTIES {
+        int Id PK
+        string Title
+        string Location
+        string PropertyType
+        string ListingType
+        decimal Price
+        int Bedrooms
+        int Bathrooms
+        int Parking
+        decimal SizeM2
+        string Description
+        bool IsFeatured
+        bool IsAvailable
+        string ListingStatus
+        int AgentId FK
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+    PROPERTY_IMAGES {
+        int Id PK
+        int PropertyId FK
+        string ImageUrl
+        bool IsPrimary
+        int SortOrder
+    }
+    PROPERTY_AMENITIES {
+        int Id PK
+        int PropertyId FK
+        string Amenity
+    }
+    APPLICATIONS {
+        int Id PK
+        int PropertyId FK
+        int TenantId FK
+        string Message
+        string Status
+        date ViewingDate
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+    WISHLIST {
+        int Id PK
+        int UserId FK
+        int PropertyId FK
+        datetime SavedAt
+    }
+    REFRESH_TOKENS {
+        int Id PK
+        int UserId FK
+        string Token
+        datetime ExpiresAt
+        bool IsRevoked
+        datetime CreatedAt
+    }
+    OTP_CODES {
+        int Id PK
+        string Email
+        string Code
+        datetime ExpiresAt
+        bool IsUsed
+    }
+```
 
 ### Relationship Summary
 
@@ -182,7 +289,114 @@ The ERD below illustrates all database tables, their attributes, primary keys (�
 
 The class diagram below shows all domain model classes, their attributes with data types, and the navigational relationships between them with cardinality labels.
 
-![Class Diagram](./diagrams/class.png)
+```mermaid
+classDiagram
+    class User {
+        +int Id
+        +string FullName
+        +string Email
+        +string? Phone
+        +string PasswordHash
+        +string Role
+        +bool IsActive
+        +DateTime CreatedAt
+        +DateTime UpdatedAt
+    }
+    class UserPreferences {
+        +int Id
+        +int UserId
+        +string? ListingType
+        +string? PropertyType
+        +decimal? MaxPrice
+        +int? MinBedrooms
+        +string? PreferredLocation
+        +DateTime UpdatedAt
+    }
+    class Agent {
+        +int Id
+        +int? UserId
+        +string FullName
+        +string Role
+        +string? AvatarUrl
+        +string? Phone
+        +string? Email
+        +bool IsActive
+        +DateTime CreatedAt
+    }
+    class Property {
+        +int Id
+        +string Title
+        +string Location
+        +string PropertyType
+        +string ListingType
+        +decimal Price
+        +int Bedrooms
+        +int Bathrooms
+        +int Parking
+        +decimal SizeM2
+        +string? Description
+        +bool IsFeatured
+        +bool IsAvailable
+        +string ListingStatus
+        +int? AgentId
+        +DateTime CreatedAt
+        +DateTime UpdatedAt
+    }
+    class PropertyImage {
+        +int Id
+        +int PropertyId
+        +string ImageUrl
+        +bool IsPrimary
+        +int SortOrder
+    }
+    class PropertyAmenity {
+        +int Id
+        +int PropertyId
+        +string Amenity
+    }
+    class Application {
+        +int Id
+        +int PropertyId
+        +int TenantId
+        +string? Message
+        +string Status
+        +DateOnly? ViewingDate
+        +DateTime CreatedAt
+        +DateTime UpdatedAt
+    }
+    class Wishlist {
+        +int Id
+        +int UserId
+        +int PropertyId
+        +DateTime SavedAt
+    }
+    class RefreshToken {
+        +int Id
+        +int UserId
+        +string Token
+        +DateTime ExpiresAt
+        +bool IsRevoked
+        +DateTime CreatedAt
+    }
+    class OtpCode {
+        +int Id
+        +string Email
+        +string Code
+        +DateTime ExpiresAt
+        +bool IsUsed
+    }
+
+    User "1" --> "0..1" UserPreferences : has
+    User "1" --> "0..1" Agent : "linked to"
+    Agent "1" --> "0..*" Property : lists
+    Property "1" --> "1..*" PropertyImage : has
+    Property "1" --> "0..*" PropertyAmenity : has
+    Property "1" --> "0..*" Application : receives
+    User "1" --> "0..*" Application : submits
+    User "1" --> "0..*" Wishlist : saves
+    Property "1" --> "0..*" Wishlist : "saved in"
+    User "1" --> "0..*" RefreshToken : owns
+```
 
 ### Class Descriptions
 
@@ -218,13 +432,25 @@ The class diagram below shows all domain model classes, their attributes with da
 
 ## 7. Activity Diagrams
 
-The combined activity diagram below illustrates all four core system workflows across three swimlanes: **Tenant/Agent**, **Admin**, and **System**.
-
-![Activity Diagram](./diagrams/activity.png)
+The diagrams below illustrate all four core system workflows across the actors involved: **Tenant/Agent**, **Admin**, and **System**.
 
 ### Workflow 1 — Login with OTP
 
 This workflow describes the two-step authentication process used by all users.
+
+```mermaid
+sequenceDiagram
+    actor U as Tenant/Agent
+    participant S as System
+    participant E as Email
+    U->>S: POST /auth/login (email, password)
+    S->>S: Verify password (BCrypt) & check IsActive
+    S->>E: Send 6-digit OTP (10 min expiry)
+    E-->>U: OTP email
+    U->>S: POST /auth/verify-otp (code)
+    S->>S: Validate code, expiry, IsUsed flag
+    S-->>U: JWT access token + refresh token
+```
 
 | Step | Actor | Description |
 |---|---|---|
@@ -245,6 +471,24 @@ This workflow describes the two-step authentication process used by all users.
 
 This workflow describes how a new agent account is created and activated by an administrator.
 
+```mermaid
+sequenceDiagram
+    actor A as Agent
+    participant S as System
+    actor Ad as Admin
+    A->>S: POST /auth/register (role=agent)
+    S->>S: Create User & Agent (IsActive=false)
+    S-->>A: "Pending approval" confirmation
+    Ad->>S: GET /agents/pending
+    Ad->>S: POST /agents/{id}/approve or /reject
+    alt Approved
+        S->>S: Set User.IsActive & Agent.IsActive = true
+        S-->>A: Approval email
+    else Rejected
+        S-->>A: Rejection email
+    end
+```
+
 | Step | Actor | Description |
 |---|---|---|
 | 1 | Agent | Fills the registration form selecting role = "agent" |
@@ -263,6 +507,23 @@ This workflow describes how a new agent account is created and activated by an a
 
 This workflow describes how an agent submits a property listing and how an admin reviews it.
 
+```mermaid
+sequenceDiagram
+    actor A as Agent
+    participant S as System
+    actor Ad as Admin
+    A->>S: POST /properties
+    S->>S: Create Property (ListingStatus=pending_review)
+    Ad->>S: GET /properties/pending-review
+    Ad->>S: PATCH /properties/{id}/listing-status
+    alt Approved
+        S-->>A: Approval email, property visible to tenants
+    else Rejected
+        S-->>A: Rejection email
+        A->>S: Edit & resubmit
+    end
+```
+
 | Step | Actor | Description |
 |---|---|---|
 | 1 | Agent | Navigates to My Listings in the dashboard and clicks Add Listing |
@@ -279,6 +540,23 @@ This workflow describes how an agent submits a property listing and how an admin
 ### Workflow 4 — Rental Application Workflow
 
 This workflow describes the full lifecycle of a tenant applying for a property.
+
+```mermaid
+sequenceDiagram
+    actor T as Tenant
+    participant S as System
+    actor AG as Agent/Admin
+    T->>S: POST /applications
+    S->>S: Check auth, duplicate, and IsAvailable
+    S-->>T: 201 Created (Status=pending)
+    AG->>S: PATCH /applications/{id}/status
+    alt Approved
+        S-->>T: Approval email
+    else Rejected
+        S-->>T: Rejection email
+    end
+    T->>S: GET /applications/my
+```
 
 | Step | Actor | Description |
 |---|---|---|
